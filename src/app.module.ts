@@ -6,6 +6,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import { ProfileModule } from './profile/profile.module';
+import { LocationTypeModule } from './location/locationType/location-type.module';
+import { LocationModule } from './location/location.module';
 
 @Module({
   imports: [
@@ -25,6 +27,8 @@ import { ProfileModule } from './profile/profile.module';
   UserModule,
   ProfileModule,
   AuthModule,
+  LocationTypeModule,
+  LocationModule
 ],
 
 })
