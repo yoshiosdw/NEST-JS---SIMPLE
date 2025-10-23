@@ -90,75 +90,34 @@ export class LocationService {
   // }
 
   // ✅ Find tree dengan rebuild otomatis
-async findTree(): Promise<Location[]> {
-  return this.locationRepository.findTrees({ relations: ['locationType'] });
-}
+  async findTree(): Promise<Location[]> {
+    return this.locationRepository.findTrees({ relations: ['locationType'] });
+  }
 
   async findOneWithDescendants(id: number): Promise<Location> {
-    // Ambil semua lokasi terlebih dahulu
-    const locations = await this.locationRepository.find({
+    const node = await this.locationRepository.findOne({
+      where: { id },
       relations: ['parent', 'locationType'],
     });
 
-    const map = new Map<number, Location>();
-    locations.forEach(l => map.set(l.id, { ...l, children: [] }));
-
-    // Bangun tree di memory
-    map.forEach(l => {
-      if (l.parent?.id) {
-        const parentNode = map.get(l.parent.id);
-        if (parentNode) {
-          parentNode.children?.push(l);
-        }
-      }
-    });
-
-    const node = map.get(id);
     if (!node) throw new NotFoundException('Location not found');
 
-    return node;
+    // Ini akan ambil seluruh children rekursif (grandchildren, dst.)
+    return this.locationRepository.findDescendantsTree(node);
   }
 
   async findAncestorsTree(id: number): Promise<Location> {
-    // Ambil semua lokasi beserta parent dan locationType
-    const locations = await this.locationRepository.find({
-      relations: ['parent', 'locationType'],
-    });
+  // Ambil node utama beserta relasi parent dan locationType
+  const node = await this.locationRepository.findOne({
+    where: { id },
+    relations: ['locationType'],
+  });
 
-    const map = new Map<number, Location>();
-    locations.forEach(l => map.set(l.id, { ...l }));
+  if (!node) throw new NotFoundException('Location not found');
 
-    let current = map.get(id);
-    if (!current) throw new NotFoundException('Location not found');
-
-    // Mulai dari self
-    const root: Location = { ...current };
-    let pointer = root;
-
-    while (current.parent?.id) {
-      const parentNode = map.get(current.parent.id);
-      if (!parentNode) break;
-
-      // Assign parent node ke property "parent"
-      const parentClone: Location = { ...parentNode };
-      pointer.parent = parentClone;
-
-      // Pindah pointer
-      pointer = parentClone;
-      current = parentNode;
-    }
-
-    // Hapus property parent lama di setiap node untuk mencegah loop
-    const cleanParentRecursively = (node: Location) => {
-      if (node.parent) cleanParentRecursively(node.parent);
-      // Tidak hapus parent sendiri karena ingin tetap tampil sebagai tree ke atas
-    };
-
-    cleanParentRecursively(root);
-
-    return root;
-  }
+  // Ambil seluruh ancestor tree sampai root
+  return this.locationRepository.findAncestorsTree(node);
+}
 
 
-  
 }
