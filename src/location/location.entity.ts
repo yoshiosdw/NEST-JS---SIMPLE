@@ -28,6 +28,10 @@ export class Location {
   @TreeChildren()
   children?: Location[];
 
+  @Column({ type: 'int', nullable: true })
+  kapasitas?: number | null;
+
+
   // @Column({ type: 'int', name: 'nsleft', nullable: true })
   // left: number;
 

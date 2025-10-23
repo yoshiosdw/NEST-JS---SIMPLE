@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, TreeRepository, IsNull } from 'typeorm';
+import { Repository, TreeRepository, IsNull, DeepPartial } from 'typeorm';
 import { Location } from './location.entity';
 import { CreateLocationDto } from './dtos/create-location.dto';
 import { LocationType } from './locationType/location-type.entity';
@@ -15,39 +15,130 @@ export class LocationService {
     private readonly locationTypeRepository: Repository<LocationType>,
   ) {}
 
-  async create(dto: CreateLocationDto): Promise<Location> {
-    const locationType = await this.locationTypeRepository.findOne({ where: { id: dto.locationTypeId } });
-    if (!locationType) throw new NotFoundException('Location type not found');
+  // async create(dto: CreateLocationDto): Promise<Location> {
+  //   const locationType = await this.locationTypeRepository.findOne({ where: { id: dto.locationTypeId } });
+  //   if (!locationType) throw new NotFoundException('Location type not found');
+
+  //   let parent: Location | null = null;
+  //   if (dto.parentId !== undefined && dto.parentId !== null) {
+  //     if (isNaN(dto.parentId)) {
+  //       throw new BadRequestException('parentId must be a valid number');
+  //     }
+
+  //     parent = await this.locationRepository.findOne({ where: { id: dto.parentId } });
+  //     if (!parent) throw new NotFoundException('Parent location not found');
+  //   }
+
+  //   const location = this.locationRepository.create({
+  //     ...dto,
+  //     locationType,
+  //     parent: parent as any,
+  //   });
+
+  //   try {
+  //     return await this.locationRepository.save(location);
+  //   } catch (err: any) {
+  //     if (err.message.includes('Nested sets do not support multiple root entities')) {
+  //       throw new BadRequestException('Cannot create multiple root locations. Silakan pilih parent.');
+  //     }
+  //     throw err;
+  //   }
+  // }
+
+async create(dto: CreateLocationDto): Promise<Location> {
+    // 🔍 Pastikan location type valid
+    const locationType = await this.locationTypeRepository.findOne({
+      where: { id: dto.locationTypeId },
+    });
+    if (!locationType) {
+      throw new NotFoundException('Location type not found');
+    }
 
     let parent: Location | null = null;
-    if (dto.parentId !== undefined && dto.parentId !== null) {
+
+    // 🧱 Jika tidak ada parent → ini root node
+    if (dto.parentId === null || dto.parentId === undefined) {
+      const existingRoot = await this.locationRepository.findOne({
+        where: { parent: IsNull() },
+      });
+      if (existingRoot) {
+        throw new BadRequestException(
+          'Root location sudah ada. Semua lokasi baru harus memiliki parent.'
+        );
+      }
+    } else {
+      // 🧩 Validasi parent
       if (isNaN(dto.parentId)) {
         throw new BadRequestException('parentId must be a valid number');
       }
 
-      parent = await this.locationRepository.findOne({ where: { id: dto.parentId } });
+      parent = await this.locationRepository.findOne({
+        where: { id: dto.parentId },
+        relations: ['children'],
+      });
       if (!parent) throw new NotFoundException('Parent location not found');
     }
 
-    const location = this.locationRepository.create({
-      ...dto,
+    // 🚫 Jika node ini punya parent, maka parent dianggap kategori (tanpa kapasitas)
+    if (parent) {
+      await this.locationRepository.update(parent.id, { kapasitas: null });
+    }
+
+    const newLocation: DeepPartial<Location> = {
       locationType,
-      parent: parent as any,
-    });
+      parent: parent ?? undefined, // 🟢 ubah null → undefined
+      main_warehouse: dto.main_warehouse ?? '0',
+      code: dto.code,
+      name: dto.name,
+      additional_info: dto.additional_info ?? undefined, // 🟢 ubah null → undefined
+      kapasitas: dto.kapasitas ?? undefined, // 🟢 ubah null → undefined
+    };
+
 
     try {
-      return await this.locationRepository.save(location);
+      // 💾 Simpan ke database
+      const saved = await this.locationRepository.save(newLocation);
+      return saved as Location;
     } catch (err: any) {
-      if (err.message.includes('Nested sets do not support multiple root entities')) {
-        throw new BadRequestException('Cannot create multiple root locations. Silakan pilih parent.');
+      if (err.message?.includes('Nested sets do not support multiple root entities')) {
+        throw new BadRequestException(
+          'Tidak bisa membuat lebih dari satu root location.'
+        );
       }
       throw err;
     }
   }
 
-  async findAll(): Promise<Location[]> {
-    return this.locationRepository.find({ relations: ['locationType', 'parent', 'children'] });
+
+  async findAll(): Promise<(Location & { total_kapasitas: number })[]> {
+  // 🔹 Ambil seluruh tree (bukan sekadar 1 level relasi)
+  const trees = await this.locationRepository.findTrees({
+    relations: ['locationType'],
+  });
+
+  // 🔹 Fungsi rekursif untuk menjumlah semua kapasitas hingga ke bawah
+  const calcTotal = (loc: Location): number => {
+    if (!loc.children || loc.children.length === 0) {
+      return loc.kapasitas ?? 0;
+    }
+    return (loc.kapasitas ?? 0) + loc.children.reduce(
+      (sum, child) => sum + calcTotal(child),
+      0,
+    );
+  };
+
+  // 🔹 Tambahkan properti baru "total_kapasitas" untuk setiap node
+  const addTotalRecursive = (locs: Location[]): (Location & { total_kapasitas: number })[] => {
+    return locs.map(loc => ({
+      ...loc,
+      total_kapasitas: calcTotal(loc),
+      children: loc.children ? addTotalRecursive(loc.children) : [],
+    }));
+  };
+
+  return addTotalRecursive(trees);
   }
+
 
   async findOne(id: number): Promise<Location> {
     const location = await this.locationRepository.findOne({
@@ -94,7 +185,10 @@ export class LocationService {
     return this.locationRepository.findTrees({ relations: ['locationType'] });
   }
 
-  async findOneWithDescendants(id: number): Promise<Location> {
+  async findOneWithDescendants(
+    id: number,
+  ): Promise<Location & { total_kapasitas: number }> {
+    // Ambil node target
     const node = await this.locationRepository.findOne({
       where: { id },
       relations: ['parent', 'locationType'],
@@ -102,22 +196,64 @@ export class LocationService {
 
     if (!node) throw new NotFoundException('Location not found');
 
-    // Ini akan ambil seluruh children rekursif (grandchildren, dst.)
-    return this.locationRepository.findDescendantsTree(node);
+    // Ambil seluruh children (rekursif)
+    const tree = await this.locationRepository.findDescendantsTree(node);
+
+    // 🔹 Fungsi rekursif untuk menghitung total kapasitas dari seluruh descendants
+    const calcTotal = (loc: Location): number => {
+      if (!loc.children || loc.children.length === 0) {
+        return loc.kapasitas ?? 0;
+      }
+      return (loc.kapasitas ?? 0) + loc.children.reduce(
+        (sum, child) => sum + calcTotal(child),
+        0,
+      );
+    };
+
+    // 🔹 Tambahkan total ke setiap node
+    const addTotalRecursive = (loc: Location): Location & { total_kapasitas: number } => ({
+      ...loc,
+      total_kapasitas: calcTotal(loc),
+      children: loc.children?.map(addTotalRecursive) ?? [],
+    });
+
+    return addTotalRecursive(tree);
   }
 
-  async findAncestorsTree(id: number): Promise<Location> {
-  // Ambil node utama beserta relasi parent dan locationType
-  const node = await this.locationRepository.findOne({
-    where: { id },
-    relations: ['locationType'],
-  });
+  async findAncestorsTree(
+    id: number,
+  ): Promise<Location & { total_kapasitas: number }> {
+    // Ambil node target
+    const node = await this.locationRepository.findOne({
+      where: { id },
+      relations: ['locationType'],
+    });
 
-  if (!node) throw new NotFoundException('Location not found');
+    if (!node) throw new NotFoundException('Location not found');
 
-  // Ambil seluruh ancestor tree sampai root
-  return this.locationRepository.findAncestorsTree(node);
-}
+    // Ambil semua ancestor tree sampai root
+    const tree = await this.locationRepository.findAncestorsTree(node);
+
+    // 🔹 Fungsi rekursif total kapasitas
+    const calcTotal = (loc: Location): number => {
+      if (!loc.children || loc.children.length === 0) {
+        return loc.kapasitas ?? 0;
+      }
+      return (loc.kapasitas ?? 0) + loc.children.reduce(
+        (sum, child) => sum + calcTotal(child),
+        0,
+      );
+    };
+
+    // 🔹 Tambahkan total ke setiap node ancestor
+    const addTotalRecursive = (loc: Location): Location & { total_kapasitas: number } => ({
+      ...loc,
+      total_kapasitas: calcTotal(loc),
+      children: loc.children?.map(addTotalRecursive) ?? [],
+    });
+
+    return addTotalRecursive(tree);
+  }
 
 
 }

@@ -18,6 +18,10 @@ export class CreateLocationDto {
   locationTypeId: string;
 
   @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : Number(value)))
+  kapasitas?: number;
+
+  @IsOptional()
    @Transform(({ value }) => (value === '' ? undefined : Number(value)))
   parentId?: number;
 }
