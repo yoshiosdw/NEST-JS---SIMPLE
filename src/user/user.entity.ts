@@ -1,8 +1,9 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Profile } from '../profile/profile.entity';
+import { Role } from 'src/role/role.entity';
 
-@Entity()
+@Entity('users')
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -13,12 +14,19 @@ export class User {
   @Column()
   password: string;
 
-  @Column({ default: 'user' })
-  role: string;
+  @OneToOne(() => Role)
+  @JoinColumn()
+  role: Role;
 
   @OneToOne(() => Profile)
   @JoinColumn()
   profile: Profile;
+
+  @CreateDateColumn({ type: 'timestamp' })
+  created_at: Date;
+  
+  @UpdateDateColumn({ type: 'timestamp' })
+  updated_at: Date;
 
   async validatePassword(password: string): Promise<boolean> {
     return bcrypt.compare(password, this.password);

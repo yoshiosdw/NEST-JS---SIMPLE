@@ -9,7 +9,7 @@ export class CreateUserDto {
   password: string;
 
   @IsString()
-  role: string;
+  roleId: string;
 
   @IsUUID()
   @IsNotEmpty({ message: 'profileId is required' })

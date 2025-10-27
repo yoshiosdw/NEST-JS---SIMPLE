@@ -2,52 +2,54 @@ import { DataSource } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../user/user.entity';
 import { Profile } from '../profile/profile.entity';
+import { Role } from '../role/role.entity';
 import { AppDataSource } from './data-source';
 
-async function seedAdmin() {
+export async function seedAdmin(dataSource?: DataSource) {
+  let ds: DataSource | null = null;
+
   try {
-    // Inisialisasi koneksi database
-    const dataSource: DataSource = await AppDataSource.initialize();
+    ds = dataSource || (await AppDataSource.initialize());
+    const userRepo = ds.getRepository(User);
+    const profileRepo = ds.getRepository(Profile);
+    const roleRepo = ds.getRepository(Role);
 
-    const userRepo = dataSource.getRepository(User);
-    const profileRepo = dataSource.getRepository(Profile);
-
-    // Cek apakah admin sudah ada
-    const existingAdmin = await userRepo.findOne({ where: { email: 'admin@example.com' } });
+    const existingAdmin = await userRepo.findOne({ where: { email: 'admin' } });
     if (existingAdmin) {
-      console.log('Admin sudah ada, seeder dilewati');
-      await dataSource.destroy();
+      console.log('✅ Admin sudah ada, dilewati');
+      if (!dataSource) await ds.destroy();
       return;
     }
 
-    // Buat profile untuk admin (boleh kosong atau default)
-   const adminProfile = profileRepo.create({
-  address: 'Admin Address',
-  fullName: 'Administrator',
-  nik: undefined, // atau bisa dihilangkan saja
-});
+    const adminRole = await roleRepo.findOne({ where: { name: 'administrator' } });
+    if (!adminRole) throw new Error('Role "administrator" belum ada.');
 
+    const adminProfile = profileRepo.create({
+      fullName: 'Administrator',
+      address: 'Admin Address',
+    });
     await profileRepo.save(adminProfile);
 
-    // Hash password admin
     const hashedPassword = await bcrypt.hash('password', 10);
 
-    // Buat admin user
     const adminUser = userRepo.create({
       email: 'admin',
       password: hashedPassword,
-      role: 'admin',
-      profile: adminProfile,
+      role: adminRole,        // ✅ ini langsung object Role
+      profile: adminProfile,  // ✅ ini langsung object Profile
     });
 
     await userRepo.save(adminUser);
 
-    console.log('Admin default berhasil dibuat');
-    await dataSource.destroy();
+    console.log('✅ Admin default berhasil dibuat');
+
+    if (!dataSource) await ds.destroy();
   } catch (err) {
-    console.error('Gagal membuat admin default:', err);
+    console.error('❌ Gagal membuat admin default:', err);
+    if (ds && !dataSource) await ds.destroy();
   }
 }
 
-// Jalankan seeder
-seedAdmin();
+if (require.main === module) {
+  seedAdmin();
+}

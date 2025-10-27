@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { ProfileModule } from './profile/profile.module';
 import { LocationTypeModule } from './location/locationType/location-type.module';
 import { LocationModule } from './location/location.module';
+import { RoleModule } from './role/role.module';
 
 @Module({
   imports: [
@@ -28,7 +29,8 @@ import { LocationModule } from './location/location.module';
   ProfileModule,
   AuthModule,
   LocationTypeModule,
-  LocationModule
+  LocationModule,
+  RoleModule
 ],
 
 })

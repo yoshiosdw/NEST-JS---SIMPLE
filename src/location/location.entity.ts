@@ -29,7 +29,7 @@ export class Location {
   children?: Location[];
 
   @Column({ type: 'int', nullable: true })
-  kapasitas?: number | null;
+  capacity?: number | null;
 
 
   // @Column({ type: 'int', name: 'nsleft', nullable: true })
