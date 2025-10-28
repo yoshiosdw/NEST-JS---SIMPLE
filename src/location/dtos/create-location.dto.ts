@@ -19,7 +19,7 @@ export class CreateLocationDto {
 
   @IsOptional()
   @Transform(({ value }) => (value === '' ? undefined : Number(value)))
-  kapasitas?: number;
+  capacity?: number;
 
   @IsOptional()
    @Transform(({ value }) => (value === '' ? undefined : Number(value)))

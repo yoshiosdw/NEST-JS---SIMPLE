@@ -6,10 +6,14 @@ import { User } from './user.entity';
 import { Profile } from '../profile/profile.entity';
 import { CreateUserDto } from './dtos/create-user.dto';
 import { RegisterDto } from '../auth/dtos/register.dto';
+import { Role } from 'src/role/role.entity';
 
 @Injectable()
 export class UserService {
   constructor(
+    @InjectRepository(Role)
+    private readonly rolesRepository: Repository<Role>, 
+
     @InjectRepository(User)
     private readonly usersRepository: Repository<User>,
 
@@ -18,44 +22,46 @@ export class UserService {
   ) {}
 
   // Admin / create user dengan profileId
-  async create(createUserDto: CreateUserDto): Promise<User> {
-  const existingUser = await this.findByEmail(createUserDto.email);
-  if (existingUser) throw new ConflictException('Email already registered');
+ async create(createUserDto: CreateUserDto): Promise<User> {
+    const existingUser = await this.findByEmail(createUserDto.email);
+    if (existingUser) throw new ConflictException('Email already registered');
 
-  const profile = await this.profilesRepository.findOne({
-    where: { id: createUserDto.profileId },
-  });
+    const profile = await this.profilesRepository.findOne({
+      where: { id: createUserDto.profileId },
+    });
+    if (!profile) throw new NotFoundException('Profile not found');
 
-  if (!profile) {
-    throw new NotFoundException('Profile not found. Please create profile first.');
+    const role = await this.rolesRepository.findOne({
+      where: { id: createUserDto.roleId },
+    });
+    if (!role) throw new NotFoundException('Role not found');
+
+    const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
+
+    const user = this.usersRepository.create({
+      email: createUserDto.email,
+      password: hashedPassword,
+      profile,
+      role,
+    });
+
+    return this.usersRepository.save(user);
   }
 
-  const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
-
-  const user = this.usersRepository.create({
-    email: createUserDto.email,
-    password: hashedPassword,
-    role: createUserDto.role || 'user',
-    profile,
-  });
-
-  return this.usersRepository.save(user);
-}
-
-
-  // Registrasi user biasa (tidak perlu profileId)
   async register(registerDto: RegisterDto): Promise<User> {
     const existingUser = await this.findByEmail(registerDto.email);
-    if (existingUser) {
-      throw new ConflictException('Email already registered');
-    }
+    if (existingUser) throw new ConflictException('Email already registered');
 
     const hashedPassword = await bcrypt.hash(registerDto.password, 10);
+
+    const roleEntity = await this.rolesRepository.findOne({ where: { name: 'user' } });
+
+    if (!roleEntity) throw new NotFoundException('Default role not found');
 
     const user = this.usersRepository.create({
       email: registerDto.email,
       password: hashedPassword,
-      role: 'user',
+      role: roleEntity,
     });
 
     return this.usersRepository.save(user);

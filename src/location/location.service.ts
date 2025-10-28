@@ -79,9 +79,9 @@ async create(dto: CreateLocationDto): Promise<Location> {
       if (!parent) throw new NotFoundException('Parent location not found');
     }
 
-    // 🚫 Jika node ini punya parent, maka parent dianggap kategori (tanpa kapasitas)
+    // 🚫 Jika node ini punya parent, maka parent dianggap kategori (tanpa capacity)
     if (parent) {
-      await this.locationRepository.update(parent.id, { kapasitas: null });
+      await this.locationRepository.update(parent.id, { capacity: null });
     }
 
     const newLocation: DeepPartial<Location> = {
@@ -91,7 +91,7 @@ async create(dto: CreateLocationDto): Promise<Location> {
       code: dto.code,
       name: dto.name,
       additional_info: dto.additional_info ?? undefined, // 🟢 ubah null → undefined
-      kapasitas: dto.kapasitas ?? undefined, // 🟢 ubah null → undefined
+      capacity: dto.capacity ?? undefined, // 🟢 ubah null → undefined
     };
 
 
@@ -110,28 +110,28 @@ async create(dto: CreateLocationDto): Promise<Location> {
   }
 
 
-  async findAll(): Promise<(Location & { total_kapasitas: number })[]> {
+  async findAll(): Promise<(Location & { total_capacity: number })[]> {
   // 🔹 Ambil seluruh tree (bukan sekadar 1 level relasi)
   const trees = await this.locationRepository.findTrees({
     relations: ['locationType'],
   });
 
-  // 🔹 Fungsi rekursif untuk menjumlah semua kapasitas hingga ke bawah
+  // 🔹 Fungsi rekursif untuk menjumlah semua capacity hingga ke bawah
   const calcTotal = (loc: Location): number => {
     if (!loc.children || loc.children.length === 0) {
-      return loc.kapasitas ?? 0;
+      return loc.capacity ?? 0;
     }
-    return (loc.kapasitas ?? 0) + loc.children.reduce(
+    return (loc.capacity ?? 0) + loc.children.reduce(
       (sum, child) => sum + calcTotal(child),
       0,
     );
   };
 
-  // 🔹 Tambahkan properti baru "total_kapasitas" untuk setiap node
-  const addTotalRecursive = (locs: Location[]): (Location & { total_kapasitas: number })[] => {
+  // 🔹 Tambahkan properti baru "total_capacity" untuk setiap node
+  const addTotalRecursive = (locs: Location[]): (Location & { total_capacity: number })[] => {
     return locs.map(loc => ({
       ...loc,
-      total_kapasitas: calcTotal(loc),
+      total_capacity: calcTotal(loc),
       children: loc.children ? addTotalRecursive(loc.children) : [],
     }));
   };
@@ -187,7 +187,7 @@ async create(dto: CreateLocationDto): Promise<Location> {
 
   async findOneWithDescendants(
     id: number,
-  ): Promise<Location & { total_kapasitas: number }> {
+  ): Promise<Location & { total_capacity: number }> {
     // Ambil node target
     const node = await this.locationRepository.findOne({
       where: { id },
@@ -199,21 +199,21 @@ async create(dto: CreateLocationDto): Promise<Location> {
     // Ambil seluruh children (rekursif)
     const tree = await this.locationRepository.findDescendantsTree(node);
 
-    // 🔹 Fungsi rekursif untuk menghitung total kapasitas dari seluruh descendants
+    // 🔹 Fungsi rekursif untuk menghitung total capacity dari seluruh descendants
     const calcTotal = (loc: Location): number => {
       if (!loc.children || loc.children.length === 0) {
-        return loc.kapasitas ?? 0;
+        return loc.capacity ?? 0;
       }
-      return (loc.kapasitas ?? 0) + loc.children.reduce(
+      return (loc.capacity ?? 0) + loc.children.reduce(
         (sum, child) => sum + calcTotal(child),
         0,
       );
     };
 
     // 🔹 Tambahkan total ke setiap node
-    const addTotalRecursive = (loc: Location): Location & { total_kapasitas: number } => ({
+    const addTotalRecursive = (loc: Location): Location & { total_capacity: number } => ({
       ...loc,
-      total_kapasitas: calcTotal(loc),
+      total_capacity: calcTotal(loc),
       children: loc.children?.map(addTotalRecursive) ?? [],
     });
 
@@ -222,7 +222,7 @@ async create(dto: CreateLocationDto): Promise<Location> {
 
   async findAncestorsTree(
     id: number,
-  ): Promise<Location & { total_kapasitas: number }> {
+  ): Promise<Location & { total_capacity: number }> {
     // Ambil node target
     const node = await this.locationRepository.findOne({
       where: { id },
@@ -234,21 +234,21 @@ async create(dto: CreateLocationDto): Promise<Location> {
     // Ambil semua ancestor tree sampai root
     const tree = await this.locationRepository.findAncestorsTree(node);
 
-    // 🔹 Fungsi rekursif total kapasitas
+    // 🔹 Fungsi rekursif total capacity
     const calcTotal = (loc: Location): number => {
       if (!loc.children || loc.children.length === 0) {
-        return loc.kapasitas ?? 0;
+        return loc.capacity ?? 0;
       }
-      return (loc.kapasitas ?? 0) + loc.children.reduce(
+      return (loc.capacity ?? 0) + loc.children.reduce(
         (sum, child) => sum + calcTotal(child),
         0,
       );
     };
 
     // 🔹 Tambahkan total ke setiap node ancestor
-    const addTotalRecursive = (loc: Location): Location & { total_kapasitas: number } => ({
+    const addTotalRecursive = (loc: Location): Location & { total_capacity: number } => ({
       ...loc,
-      total_kapasitas: calcTotal(loc),
+      total_capacity: calcTotal(loc),
       children: loc.children?.map(addTotalRecursive) ?? [],
     });
 
