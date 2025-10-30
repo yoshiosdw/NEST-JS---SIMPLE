@@ -12,26 +12,28 @@ import { RoleModule } from './role/role.module';
 
 @Module({
   imports: [
-  ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ isGlobal: true }),
 
-  TypeOrmModule.forRoot({
-    type: 'postgres',
-    host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT),
-    username: process.env.DB_USERNAME,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    autoLoadEntities: true,
-    synchronize: true, // ⚠️ hanya untuk dev
-  }),
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST,
+      port: Number(process.env.DB_PORT),
+      username: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      autoLoadEntities: true,
+      synchronize: false, // ⚠️ hanya aktifkan true saat pengembangan
 
-  UserModule,
-  ProfileModule,
-  AuthModule,
-  LocationTypeModule,
-  LocationModule,
-  RoleModule
-],
+      // ✅ Tambahkan bagian SSL ini:
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+    }),
 
+    UserModule,
+    ProfileModule,
+    AuthModule,
+    LocationTypeModule,
+    LocationModule,
+    RoleModule,
+  ],
 })
 export class AppModule {}

@@ -7,10 +7,11 @@ import { User } from './user.entity';
 import { Profile } from '../profile/profile.entity';
 import { AbilityModule } from '../common/abilities/ability.module';
 import { AuthModule } from '../auth/auth.module';
+import { Role } from 'src/role/role.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, Profile]),
+    TypeOrmModule.forFeature([User, Profile, Role]),
     AbilityModule,
     forwardRef(() => AuthModule), // supaya JwtService tersedia
   ],

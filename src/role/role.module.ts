@@ -14,5 +14,6 @@ import { AuthModule } from '@auth/auth.module';
   ],
   controllers: [RoleController],
   providers: [RoleService],
+  exports: [RoleService],
 })
 export class RoleModule {}
